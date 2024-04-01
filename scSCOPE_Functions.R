@@ -408,7 +408,7 @@ pathwayEnrichment <- function(pathwayDatabase = c("KEGG", "GOBP", "GOCC", "GOMF"
           } else {
             
             path_res$`Core Gene` <- curr_core_gene
-            path_res$Cancer <- str_remove(x, "_Summary.csv")
+            path_res$Cluster <- str_remove(x, "_Summary.csv")
             
             if(exists("final_path")){
               final_path <- rbindlist(list(final_path, path_res))
@@ -445,7 +445,7 @@ pathwayEnrichment <- function(pathwayDatabase = c("KEGG", "GOBP", "GOCC", "GOMF"
           } else {
             
             path_res$`Core Gene` <- curr_core_gene
-            path_res$Cancer <- str_remove(x, "_Summary.csv")
+            path_res$Cluster <- str_remove(x, "_Summary.csv")
             
             if(exists("final_cc")){
               final_cc <- rbindlist(list(final_cc, path_res))
@@ -482,7 +482,7 @@ pathwayEnrichment <- function(pathwayDatabase = c("KEGG", "GOBP", "GOCC", "GOMF"
           } else {
             
             path_res$`Core Gene` <- curr_core_gene
-            path_res$Cancer <- str_remove(x, "_Summary.csv")
+            path_res$Cluster <- str_remove(x, "_Summary.csv")
             
             if(exists("final_mf")){
               final_mf <- rbindlist(list(final_mf, path_res))
@@ -519,7 +519,7 @@ pathwayEnrichment <- function(pathwayDatabase = c("KEGG", "GOBP", "GOCC", "GOMF"
           } else {
             
             path_res$`Core Gene` <- curr_core_gene
-            path_res$Cancer <- str_remove(x, "_Summary.csv")
+            path_res$Cluster <- str_remove(x, "_Summary.csv")
             
             if(exists("final_bp")){
               final_bp <- rbindlist(list(final_bp, path_res))
@@ -574,12 +574,12 @@ markergenes <- function(ex.data,  DIFFCORR_PERCENTILE_THRESHOLD = 0.975, FC_thre
       print(c("Reading file:", curr_file))
       curr_data <- fread(paste0("./results_sparse/corSparse/", curr_file))
       
-      curr_cancer <- str_replace(curr_file, "_SecondaryGenes.csv","")
-      curr_cancer <- str_replace(curr_file, PREFIX, "")
-      curr_data$Cancer <- curr_cancer
+      curr_Cluster <- str_replace(curr_file, "_SecondaryGenes.csv","")
+      curr_Cluster <- str_replace(curr_file, PREFIX, "")
+      curr_data$Cluster <- curr_Cluster
       
       print(c("Reading Differential Correlation file"))
-      diffcorr_null_dist <- fread(paste0("./diffCox/", curr_cancer, "_DiffCorrNull.csv"))
+      diffcorr_null_dist <- fread(paste0("./diffCox/", curr_Cluster, "_DiffCorrNull.csv"))
       diffcorr_cutoff <- c()
       print("Calculating median percentile from differential co-expression data...")
       for(i in 1:ncol(diffcorr_null_dist)){
@@ -597,7 +597,7 @@ markergenes <- function(ex.data,  DIFFCORR_PERCENTILE_THRESHOLD = 0.975, FC_thre
     final_data <- c()
     for(i in 1:nrow(all_pathways)){
       genes <- unique(str_split(all_pathways$userId[i], ";")[[1]])
-      curr_data <- data.table(Cancer = rep(all_pathways$Cancer[i], length(genes)),
+      curr_data <- data.table(Cluster = rep(all_pathways$Cluster[i], length(genes)),
                               `KEGG GeneSet` = rep(all_pathways$geneSet[i], length(genes)),
                               `Pathway Name` = rep(all_pathways$description[i], length(genes)),
                               `Core Gene` = rep(all_pathways$`Core Gene`[i], length(genes)),
@@ -608,14 +608,14 @@ markergenes <- function(ex.data,  DIFFCORR_PERCENTILE_THRESHOLD = 0.975, FC_thre
     
     final_data$`Core Gene` <- all_corrs$`Core Gene`[match(final_data$`Core Gene`, all_corrs$`Core Gene`)]
     final_data$`Secondary Gene` <- all_corrs$`Secondary Gene`[match(final_data$`Secondary Gene`, all_corrs$`Secondary Gene`)]
-    final_data$Cancer <- str_remove(final_data$Cancer, "_SecondaryGenes.csv")
+    final_data$Cluster <- str_remove(final_data$Cluster, "_SecondaryGenes.csv")
     
-    final_data <- merge(final_data, all_corrs, by = c("Cancer", "Core Gene", "Secondary Gene"), no.dups = TRUE)
+    final_data <- merge(final_data, all_corrs, by = c("Cluster", "Core Gene", "Secondary Gene"), no.dups = TRUE)
     
-    nclss <- unique(final_data$Cancer)
+    nclss <- unique(final_data$Cluster)
     gl_res <- c()
     for(cls in nclss){
-      subb <- final_data[final_data$Cancer == cls, ]
+      subb <- final_data[final_data$Cluster == cls, ]
       diff_sig <- subb$'Differential Correlation Sig'[1]
       #subb <- subb[subb$`Is Differential Correlation Sig` == "Yes" | (is.na(subb$`Other Correlation`) & subb$`Cluster Correlation` >= diff_sig) | (is.na(subb$`Other Correlation`) & subb$`Cluster Correlation` <= -diff_sig) | (is.na(subb$`Cluster Correlation`) & subb$`Other Correlation` >=diff_sig)| (is.na(subb$`Cluster Correlation`) & subb$`Other Correlation` <= -diff_sig) | subb$Correlation >= diff_sig | subb$Correlation < -diff_sig, ]
       
@@ -653,7 +653,7 @@ markergenes <- function(ex.data,  DIFFCORR_PERCENTILE_THRESHOLD = 0.975, FC_thre
     
     for(x in nclss){
       print(c("Currently calculating for cluster ", x))
-      sub_genelevel <- genelevel[genelevel$Cancer == x, ]
+      sub_genelevel <- genelevel[genelevel$Cluster == x, ]
 
       #sub_genelevel <- sub_genelevel[sub_genelevel$`Is Differential Correlation Sig` == "Yes" | (is.na(sub_genelevel$`Other Correlation`) & sub_genelevel$`Cluster Correlation` >= diff_sig) | (is.na(sub_genelevel$`Other Correlation`) & sub_genelevel$`Cluster Correlation` <= -diff_sig) | (is.na(sub_genelevel$`Cluster Correlation`) & sub_genelevel$`Other Correlation` >=diff_sig)| (is.na(sub_genelevel$`Cluster Correlation`) & sub_genelevel$`Other Correlation` <= -diff_sig), ]
       
@@ -663,7 +663,7 @@ markergenes <- function(ex.data,  DIFFCORR_PERCENTILE_THRESHOLD = 0.975, FC_thre
       
       sub_genelevel$diffmet <- mapply(max,sub_genelevel$`Correlation`, sub_genelevel$`Cluster Correlation`, sub_genelevel$`Other Correlation`, sub_genelevel$`Differential Correlation`)
       
-      pathway <- subset(sub_genelevel, select = c("Cancer", "Core Gene", "Secondary Gene", "KEGG GeneSet"))
+      pathway <- subset(sub_genelevel, select = c("Cluster", "Core Gene", "Secondary Gene", "KEGG GeneSet"))
       pathway_result <- data.frame(table(pathway$`KEGG GeneSet`))
       colnames(pathway_result) <- c("KEGG GeneSet", "Frequency")
       pathway_result$cluster <- x
@@ -720,7 +720,7 @@ markergenes <- function(ex.data,  DIFFCORR_PERCENTILE_THRESHOLD = 0.975, FC_thre
         }
       }
       
-      print("Fold change doing")
+      print("Calculating Fold Change")
       all_marker <- FoldChange(all_cell, ident.1 = x, features = unique(marker_genes)) ##############################################################################
       all_marker$Gene <- rownames(all_marker)
       all_marker$cluster = x
@@ -728,8 +728,6 @@ markergenes <- function(ex.data,  DIFFCORR_PERCENTILE_THRESHOLD = 0.975, FC_thre
       marker <- all_marker[all_marker$pct.1 > 0.45 | all_marker$pct.2 > 0.45, ]
       marker <- marker[marker$avg_log2FC >= FC_thres | marker$avg_log2FC <= -FC_thres, ]
       results <- rbindlist(list(marker, results), fill = TRUE)
-      #mouse <- useMart("ensembl", dataset = "mmusculus_gene_ensembl")
-      #gene_coords <- data.frames$GeneName <- gene_coords$external_gene_name
     }
     
     fwrite(all_mgenes, paste0(dirr, "/final/All_Marker_Genes.csv"))
@@ -742,18 +740,16 @@ markergenes <- function(ex.data,  DIFFCORR_PERCENTILE_THRESHOLD = 0.975, FC_thre
     m_genes <- results$Gene
     f_data <- genelevel[genelevel$`Core Gene` %in% m_genes | genelevel$`Secondary Gene` %in% m_genes, ]
     
+    f_data <- subset(f_data, select = c(Cluster, `Core Gene`, `Secondary Gene`, `KEGG GeneSet`, `Pathway Name`))
+    mel_data <- melt(f_data, id.vars = c("Cluster", "KEGG GeneSet", "Pathway Name"))
     
-    
-    f_data <- subset(f_data, select = c(Cancer, `Core Gene`, `Secondary Gene`, `KEGG GeneSet`, `Pathway Name`))
-    mel_data <- melt(f_data, id.vars = c("Cancer", "KEGG GeneSet", "Pathway Name"))
-    
-    ncls = length(unique(mel_data$Cancer))
+    ncls = unique(mel_data$Cluster)
     
     fin_res = c()
-    for(i in 1:ncls){
+    for(i in ncls){
       
       m_genes2 <- results[results$cluster == i,]$Gene
-      mel_data2 <- mel_data[mel_data$Cancer == i & mel_data$value %in% m_genes2,]
+      mel_data2 <- mel_data[mel_data$Cluster == i & mel_data$value %in% m_genes2,]
       f_table2 <- data.frame(table(mel_data2$value, mel_data2$`Pathway Name`))
       un_genes <- unique(f_table2$Var1)
       for(gene in un_genes){
