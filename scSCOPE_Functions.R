@@ -103,11 +103,48 @@ diffCorrelation_null <- function(ex.data, ITERS = 100, DIFFCORR_PERCENTILE_THRES
   }
 }
 
+diff_corr_1vs1(ex.data, cls1, cls2, START_SEED = 2222, PROBES_PER_ITER = 1000){
+  if(file.exists(paste0("diffCox/scope", cls1, "_", cls2, "_DiffCorrNull.csv"))){
+    next
+  }
+  expr.data <- ex.data[ex.data$phenotype %in% c(cls1, cls2), ]
+  expr.data$phenotype <- ifelse(expr.data$phenotype == cls1, 0,1)
+  print("Current phenotypes after substituting: ")
+  
+  print(table(expr.data$phenotype))
+  cluster1 <- expr.data[expr.data$phenotype == 0,]
+  cluster2 <- expr.data[expr.data$phenotype == 1,]
+  
+  null_dist <- c()
+  
+  set.seed(START_SEED)
+  for(i in 1:ITERS){
+    print(paste0("Current trial ", i))
 
-
-#Now run one vs all logistic regression for each cluster with respect to all data in the dataset.
-
-dir.create("results_sparse", showWarnings = FALSE)
+    rnd_smp <- sample(colnames(expr.data)[2:(ncol(expr.data)-1)], PROBES_PER_ITER)
+    
+    cluster1_sel <- cluster1[, ..rnd_smp]
+    cluster2_sel <- cluster2[, ..rnd_smp]
+    
+    cluster1_cor <- cor(cluster1_sel)
+    cluster2_cor <- cor(cluster2_sel)
+    
+    cluster1_corflat <- flattenCorrMatrix(cluster1_cor)
+    cluster2_corflat <- flattenCorrMatrix(cluster2_cor)
+    
+    merged <- merge(cluster1_corflat, cluster2_corflat, by = c("row", "column"))
+    merged$diffcor <- abs(merged$cor.x - merged$cor.y)
+    
+    if(is.null(null_dist)){
+      null_dist <- as.data.table(merged$diffcor)
+    }else{
+      null_dist <- cbind(null_dist, merged$diffcor)
+    }
+  }
+  
+  print("Writing all results.")
+  fwrite(null_dist, paste0("./diffCox/", PREFIX, cls1, "_", cls2, "_DiffCorrNull.csv"))
+  }
 
 sparse_lasso <- function(ex.data, ITERS_L = 200, FOLDS = 10){
   START_SEED = 2222
