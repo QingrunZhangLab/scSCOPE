@@ -831,5 +831,257 @@ findAllMarkerGenes1vs1 <- function(ex.data, cluster1, cluster2=NULL, corr_percen
 }
 
 
+mgenes_correlation <- function(ex.data, cls1, cls2 = NULL, mgenes ){
+    if(!is.null(cls2)){
+      expr.data <- ex.data[ex.data$phenotype %in% c(cls1, cls2), ]
+    }else{
+      expr.data <- ex.data
+    }
+		expr.data$phenotype <- ifelse(expr.data$phenotype == cls1, 0,1)
+		cluster <- expr.data[expr.data$phenotype == 0,]
+		other <- expr.data[expr.data$phenotype == 1,]
+		results <- c()
+		
+		clsM <- as.matrix(cluster[, !c("V1", "phenotype")])
+		otherM <- as.matrix(other[, !c("V1", "phenotype")])
+		allM <- as.matrix(expr.data[,!c("V1", "phenotype")])
+		
+		clsM_core <- as.matrix(subset(cluster, select = mgenes))
+		otherM_core <- as.matrix(subset(other, select = mgenes))
+		allM_core <- as.matrix(subset(expr.data, select = mgenes))
+		
+		
+		cls_res <- corSparse(clsM_core, clsM)
+		other_res <- corSparse(otherM_core, otherM)
+		
+		rownames(cls_res) <- colnames(clsM_core)
+		colnames(cls_res) <- colnames(clsM)
+		
+		rownames(other_res) <- colnames(otherM_core)
+		colnames(other_res) <- colnames(otherM)
+		
+		results_cluster <- data.table(`Core Gene` = rownames(cls_res), cls_res)
+		results_cluster <- melt(results_cluster, id.vars = "Core Gene", value.name = "Cluster Correlation", variable.name = "Secondary Gene")
+		
+		results_other <- data.table(`Core Gene` = rownames(other_res), other_res)
+		results_other <- melt(results_other, id.vars = "Core Gene", value.name = "Other Correlation", variable.name = "Secondary Gene")
+
+		results <- merge(results_cluster, results_other, by = c("Core Gene", "Secondary Gene"), all = TRUE)	
+	
+	  results[is.na(results)] <- 0
+  	return(results)
+}
+plotData <- function(all_corr, s_path){
+  all_corr$`Core Gene Name` <- all_corr$`Core Gene`
+  all_corr$`Secondary Gene Name` <- all_corr$`Secondary Gene`
+  scope_plot = c()
+  for(curr_pathway in s_path){
+    genes = c()
+    count = 0
+    while(length(genes)==0 && count < 50){
+      query <- tryCatch(keggGet(curr_pathway), error = function(e){NULL})
+      genes <- query[[1]]$GENE
+      print(c(length(genes), count))
+      count <- count+1
+    }
+    
+    if(is.null(genes)){
+      print(c("No genes identified for the pathway", curr_pathway))
+      next
+    }
+    print(c("KEGG Query done", curr_pathway))
+    genes <- genes[seq(2, length(genes), 2)]
+    genes <- str_split(genes, ";", simplify = TRUE)[,1]
+    
+    sub_corr <- all_corr[toupper(all_corr$`Secondary Gene Name`) %in% toupper(genes), ]
+    sub_corr$`KEGG GeneSet` <- curr_pathway 
+    
+    col_order <- c("KEGG GeneSet", "Core Gene", "Core Gene Name", "Secondary Gene", "Secondary Gene Name", "Cluster Correlation", "Other Correlation")
+    sub_corr <- subset(sub_corr, select = col_order)
+    
+    scope_plot <- rbindlist(list(sub_corr, scope_plot), fill = TRUE)}
+  return(scope_plot)
+}
+extend_with_bootstrap <- function(data1, data2, desired_length) {
+  set.seed(123)
+  original_length <- length(data1)
+  additional_samples_needed <- desired_length - original_length
+  if (additional_samples_needed > 0) {
+    additional_indices <- sample(1:original_length, additional_samples_needed, replace = TRUE)
+    extended_data1 <- c(data1, data1[additional_indices])
+    extended_data2 <- c(data2, data2[additional_indices])
+    
+  } else {
+    extended_data1 <- data1
+    extended_data2 <- data2
+  }
+  return(list(extended_data1, extended_data2))
+}
+plot_file <- function(plot_data, mgene){
+  curr_index <- 1
+  plot_collection <- list()
+  pathh <- unique(plot_data$`KEGG GeneSet`)
+  print(length(pathh))
+  diff_path = c()
+  for(path in pathh){
+    curr_plot_data <- plot_data[`KEGG GeneSet` == path]
+    tests <- c()
+    tmpx <- curr_plot_data$`Cluster Correlation`
+    tmpy <- curr_plot_data$`Other Correlation`
+    
+    ress <- extend_with_bootstrap(tmpx, tmpy, 100)
+    tmpx <- ress[[1]]
+    tmpy <- ress[[2]]
+    tests <- data.table(cluster = c,
+                        group1 = "Cluster",
+                        group2 = "Other",
+                        p = signif(ks.test(tmpx, tmpy)$p.value))
+    
+    diff_path = append(diff_path, path)
+    sec_genes <- unique(curr_plot_data$`Secondary Gene Name`)
+    
+    for(t in c("Cluster", "Other")){
+      curr_plot_data <- curr_plot_data[`KEGG GeneSet` == path,]
+      curr_nodes_data <- unique(curr_plot_data[, c("Core Gene Name", "Secondary Gene Name")])
+      curr_nodes_data <- melt(curr_nodes_data, variable.name = "type", value.name = "name", measure.vars = c("Core Gene Name", 
+                                                                                                             "Secondary Gene Name"))
+      curr_nodes_data$type <- str_split(curr_nodes_data$type, pattern = " ", simplify = TRUE)[,1]
+      curr_nodes_data <- unique(curr_nodes_data)
+      curr_nodes_data <- setcolorder(curr_nodes_data, c("name", "type"))
+      curr_nodes_data$scale <- ifelse(curr_nodes_data$type == "Core", 10, 2)
+      
+      if(t == "Cluster"){
+        curr_edges <- curr_plot_data[, c("Core Gene Name", "Secondary Gene Name", "Cluster Correlation")]
+      }else if(t == "Other")
+      {
+        curr_edges <- curr_plot_data[, c("Core Gene Name", "Secondary Gene Name", "Other Correlation")]
+      }
+      
+      colnames(curr_edges) <- c("from", "to", "corr")
+      curr_graph <- tbl_graph(nodes = curr_nodes_data, edges = curr_edges)
+      p <- ggraph(curr_graph, layout = "star") +
+        geom_edge_link(aes(colour = corr), edge_width = 0.5, show.legend = c(colour = TRUE, edge_width = FALSE))+
+        # scale_edge_colour_gradientn(colours = c("red", "white","blue"),
+        #                             breaks = c(-1,0,1), limits=c(-1,1),
+        #                             guide = "edge_colourbar")+
+        scale_edge_colour_gradient2(
+          limits = c(-1,1),
+          low = "red",
+          mid = "white",
+          high = "blue",
+          guide = "edge_colourbar",
+        ) +
+        xlim(-1.2, 1.2) + 
+        ylim(-1.2, 1.2) +
+        geom_node_point(aes(colour = type, size = scale), show.legend = FALSE) +
+        scale_color_manual(values = c("Core" = "skyblue", "Secondary" = "grey")) +
+        geom_node_text(aes(label=name, 
+                           filter = type=="Core", 
+                           fontface = "bold"),
+                       size = 9/.pt,
+                       show.legend = FALSE) +
+        # geom_node_text(aes(label=name,
+        #                    filter = type=="Secondary",
+        #                    fontface = "bold"),
+        #                size = 4/.pt,
+        #                show.legend = FALSE) +
+        coord_cartesian(clip = "off") +
+        theme_void() +
+        theme(text = element_text(size = 9),
+              legend.title = element_blank(),
+              legend.text = element_text(size = 6),
+              legend.title.align = 0.5,
+              legend.key.height= unit(0.3, 'cm'),
+              legend.key.width= unit(0.3, 'cm'),
+              plot.margin = margin(t = 0, r = -1, b = 0, l = -1, unit = "cm"),
+              panel.spacing = unit(-1, units = "cm"))
+      
+      if(curr_index == 1){
+        p <- p + annotation_custom(grob = textGrob(label = "Cluster Cor.", 
+                                                   hjust = "center",
+                                                   rot = 90,
+                                                   gp = gpar(cex = .6)),
+                                   xmax = -2)
+        
+        p <- p + labs(title = stringr::str_wrap(pathh, width=15)) +
+          theme(plot.title = element_text(face = "bold", size = 7, hjust = 0.5))
+        
+        
+      }
+      
+      if(curr_index == 2){
+        p <- p + annotation_custom(grob = textGrob(label = "Other Cor.", 
+                                                   hjust = "center",
+                                                   rot = 90,
+                                                   gp = gpar(cex = .6)),
+                                   xmax = -2)
+      }
+      
+      if(curr_index%%3 ==1){
+        p <- p + labs(title = stringr::str_wrap(pathh, width=15)) +
+          theme(plot.title = element_text(face = "bold", size = 7, hjust = 0.5))
+      }	 
+      
+      plot_collection[[curr_index]] <- p
+      curr_index <- curr_index + 1
+    }
+    
+    boxplot_data <- melt(curr_plot_data[, ], id.vars = c("Secondary Gene Name"), measure.vars = c("Cluster Correlation", "Other Correlation"))
+    colnames(boxplot_data)[2:3] <- c("Tissue", "Correlation")
+    boxplot_data$Tissue <- str_remove(boxplot_data$Tissue, " Correlation")
+    
+    bxplot <- ggboxplot(boxplot_data, x = "Tissue", y = "Correlation", color = "Tissue",
+                        xlab = FALSE, legend = "right", ggtheme = theme_light(),
+                        legend.title = "",
+                        legend.position = "none",
+                        palette = "npg",
+                        order = c("Cluster", "Other"),
+                        size = 0.05,
+                        width = 0.6)+
+      stat_pvalue_manual(tests,
+                         label.size = 2,
+                         y.position = 1.2,
+                         label = "p = {p}") +
+      scale_y_continuous(limits = c(-1, 1.3)) +
+      theme(axis.line = element_line(),
+            text = element_text(size = 7),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.border = element_blank(),
+            panel.background = element_blank(),
+            legend.position = "none")
+    
+    if(curr_index != 3){
+      bxplot <- bxplot + theme(axis.text.y = element_blank(),
+                               axis.title.y = element_blank())
+    }
+    
+    plot_collection[[curr_index]] <- bxplot
+    curr_index <- curr_index + 1
+  }
+  
+  pdiff <- wrap_plots(plot_collection, nrow = 3, ncol = length(diff_path)+1, byrow = FALSE, guides = "collect",
+                      widths = c(rep(20, length(diff_path)), 2))
+  
+  p <- pdiff 
+  plot_width = 3*(length(diff_path)) + 3
+  return(p)
+}
+
+geneNetworkPlots <- function(expr.data, marker_gene, pathways_of_interest, cluster1, cluster2){
+  expr.data <- dataFiltering(expr.data)
+  mgene_corr_matrix <- mgenes_correlation(expr.data, cluster1, cluster2, marker_gene)
+  
+  all_plots <- c()
+  for(i in marker_gene){
+    mgene_corr_matrix_sep <- mgene_corr_matrix[mgene_corr_matrix$`Core Gene` == i, ]
+    plot_data <- plotData(mgene_corr_matrix_sep, pathways_of_interest)
+    plots <- plot_file(plot_data, i)
+    all_plots[[i]] <- plots
+  }
+  return(all_plots)
+}
+
+
 
 
