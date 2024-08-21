@@ -46,3 +46,4 @@ findMarkerGenes(). #Can find marker genes between two clusters or one cluster vs
 findAllMarkerGenes() #Can find marker genes for each cluster compared with all other cells
 findAllMarkerGenes1vs1() #Can find marker genes between each pair of clusters
 geneNetworkPlots() #Can create geneNetwork Plots for a marker gene of interest in selected pathways.
+pathwayNetworkPlots() #Can create pathwayNetwork Plots for a pathway in the cluster of interst compared with another cluster or all other cells. 
