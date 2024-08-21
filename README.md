@@ -14,3 +14,15 @@ findMarkerGenes(ex.data = ex.data, cluster2 = 5,
                 geneId = "ensembl_gene_id")
 ```
 
+
+Gene Network Plots for a marker gene of interest can be created by using geneNetworkPlots() function.
+```
+all_p <- geneNetworkPlots(expr.data, marker_gene, cluster1, cluster2= NULL, pathways_of_interest)
+
+```
+For example: 
+all_p <- geneNetworkPlots(expr.data, "Il7r", cluster1 = 4, cluster2 = 10, pathways_of_interest = c("mmu04660", "mmu04659"))
+print(all_p$Il7r)
+![geneNetwork](https://github.com/user-attachments/assets/edd56ae3-2ed7-4d31-8a0e-f5daadc094e3)
+
+
