@@ -17,7 +17,8 @@ findMarkerGenes(ex.data = ex.data, cluster2 = 5,
 
 Gene Network Plots for a marker gene of interest can be created by using geneNetworkPlots() function.
 ```
-all_p <- geneNetworkPlots(expr.data, marker_gene, cluster1, cluster2= NULL, pathways_of_interest)
+all_p <- geneNetworkPlots(expr.data, marker_gene, cluster1, cluster2= NULL, pathways_of_interest)![Uploading Screenshot 2024-08-20 at 7.48.26 PM.png…]()
+
 #For example: 
 all_p <- geneNetworkPlots(expr.data, "Il7r", cluster1 = 4, cluster2 = 10, pathways_of_interest = c("mmu04660", "mmu04659"))
 print(all_p$Il7r)
@@ -27,4 +28,14 @@ print(all_p$Il7r)
 
 Pathway Network Plot for a pathway of interest in two clusters can be created by using pathwayNetworkPlots() function. 
 
+```
+pathwayNetworkPlot(ex.data, cls1, cls2, pathways, geneType = "ensembl_gene_id")
+
+#For example:
+p <- pathwayNetworkPlots(ex.data, cls1 = 5, cls2 = 4, pathways = "mmu04659", geneType = "ensembl_gene_id")
+print(p)
+
+```
+
+<img width="201" alt="Screenshot 2024-08-20 at 7 48 26 PM" src="https://github.com/user-attachments/assets/0dc4cc66-59eb-48a6-9d75-79206bd61d85">
 
