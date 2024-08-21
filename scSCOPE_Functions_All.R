@@ -1083,5 +1083,187 @@ geneNetworkPlots <- function(expr.data, marker_gene, pathways_of_interest, clust
 }
 
 
+diffCorr <- function(cluster, other, en_gen){
+  clsM <- as.matrix(subset(cluster, select = en_gen))
+  otherM <- as.matrix(subset(other, select = en_gen))
+  
+  cls_res <- corSparse(clsM, clsM)
+  oth_res <- corSparse(otherM, otherM)
+  
+  rownames(cls_res) <- colnames(clsM)
+  colnames(cls_res) <- colnames(clsM)
+  
+  rownames(oth_res) <- colnames(otherM)
+  colnames(oth_res) <- colnames(otherM)
+  
+  res_cls <- data.table("from" = rownames(cls_res), cls_res)
+  res_cls <- melt(res_cls, id.vars = "from", value.name = "weights", variable.name = "to")
+  
+  res_cls[is.na(res_cls$weights)]$weights <- 0
+  
+  
+  res_oth <- data.table("from" = rownames(oth_res), oth_res)
+  res_oth <- melt(res_oth, id.vars = "from", value.name = "weights", variable.name = "to")
+  
+  
+  res_oth[is.na(res_oth$weights)]$weights <- 0
+  
+  res_cls <- res_cls[res_cls$from != res_cls$to, ]
+  res_oth <- res_oth[res_oth$from != res_oth$to, ]
+  tmps <- res_cls$`weights` - res_oth$`weights`
+  return(tmps)
+}
+
+diffExp <- function(cluster, other, en_gen){
+  clsM <- as.matrix(subset(cluster, select = en_gen))
+  otherM <- as.matrix(subset(other, select = en_gen))
+  nodes <- data.frame(id = en_gen)
+  nodes$cls_exp <- sapply(nodes$id, function(x) mean(clsM[,x]))
+  nodes$oth_exp <- sapply(nodes$id, function(x) mean(otherM[,x]))
+  nodes$diff <- nodes$cls_exp - nodes$oth_exp
+  return(nodes$diff)
+}
+
+plots <- function(res, nodes, c, cluster){
+  links <- res
+  links <- links[!(links$from == links$to), ]
+  links <- links[!is.na(links$`weights`), ]
+  links <- links[order(links$weights), ]
+  links <- links %>% filter(row_number() %%2 == 1)
+  links <- links[abs(links$weights) >= 0.2,]
+  vis.nodes <- nodes
+  vis.links <- links
+  
+  vis.nodes$shape  <- "dot"  
+  vis.nodes$shadow <- TRUE # Nodes will drop shadow
+  vis.nodes$title  <- vis.nodes$id # Text on click
+  vis.nodes$label  <- vis.nodes$id # Node label
+  vis.nodes$size   <- vis.nodes$cls_exp * 30 # Node size
+  vis.nodes$borderWidth <- 1 # Node border width
+  
+  vis.nodes$color.background <- c("slategrey", "tomato")[as.integer(nodes$type == "MARKER") + 1]
+  vis.nodes$color.border <- "black"
+  vis.nodes$color.highlight.background <- "orange"
+  vis.nodes$color.highlight.border <- "darkred"
+  
+  
+  vis.links$width <- links$weights * 10 # line width
+  vis.links$color <- c("red", "blue")[as.integer(links$weights >= 0) + 1]    # line color   # arrows: 'from', 'to', or 'middle'
+  vis.links$smooth <- FALSE    # should the edges be curved?
+  vis.links$shadow <- FALSE    # edge shadow
+  
+  #vis.links$width <- abs(vis.links$width)
+  
+  p <- visNetwork(vis.nodes, vis.links, footer = cluster, ) %>%
+    visIgraphLayout(layout = "layout_in_circle")
+  
+  return(p)
+  
+}
+
+pathwayNetworkPlots <- function(ex.data, cls1, cls2=NULL, pathways, mgenes = NULL, geneType = "external_gene_name" ){
+  library(manipulateWidget)
+  library(htmltools)
+  library(igraph)
+  library(network)
+  library(sna)
+  library(ggraph)
+  library(visNetwork)
+  library(dplyr)
+  library(qlcMatrix)
+  library(data.table)
+  library(stringr)
+  library(readxl)
+  library(KEGGREST)
+  library(biomaRt)
+  #ex.data <- dataFiltering(ex.data)
+  if(!is.null(cls2)){
+    expr.data <- ex.data[ex.data$phenotype %in% c(cls1, cls2), ]
+  }else{
+    expr.data <- ex.data
+  }
+  expr.data$phenotype <- ifelse(expr.data$phenotype == cls1, 0,1)
+  cluster <- expr.data[expr.data$phenotype == 0,]
+  other <- expr.data[expr.data$phenotype == 1,]
+  
+  print(c("Currently doing for pathway", pathways))
+  genes = c()
+  count = 0
+
+  while(length(genes)==0 && count < 50){
+    query <- tryCatch(keggGet(pathways), error = function(e){NULL})
+    genes <- query[[1]]$GENE
+    print(c(length(genes), count))
+    count <- count+1
+  }
+  
+  if(is.null(genes)){
+    print(c("No genes identified for the pathway", pathways))
+    next
+  }
+  print(c("KEGG Query done", pathways, geneType, organism = "mm"))
+  genes <- genes[seq(2, length(genes), 2)]
+  genes <- str_split(genes, ";", simplify = TRUE)[,1]
+  genes <- toupper(genes)
+  organism = "mm"
+  if(organism == "mm"){
+    ensmbl <- "mmusculus_gene_ensembl"
+  }else if(organism == "hs"){
+    ensmbl <- "hsapiens_gene_ensembl"
+  }
+  if(geneType == "ensembl_gene_id"){
+    mart <- useEnsembl("ensembl", ensmbl)
+    data_coords <-  getBM(attributes = c("ensembl_gene_id", "external_gene_name"), filter = "external_gene_name",
+                          values = genes, 
+                          mart = mart)
+    
+    en_gen <- data_coords[data_coords$ensembl_gene_id%in% colnames(cluster),]$ensembl_gene_id
+    ex_gen <- data_coords[data_coords$ensembl_gene_id%in% colnames(cluster),]$external_gene_name
+  } else{
+    
+    en_gen <- genes[genes %in% colnames(ex.data)]
+  }
+   
+  clsM <- as.matrix(subset(cluster, select = en_gen))
+  otherM <- as.matrix(subset(other, select = en_gen))
+    
+  cls_res <- corSparse(clsM, clsM)
+  oth_res <- corSparse(otherM, otherM)
+  
+  
+  rownames(cls_res) <- colnames(clsM)
+  colnames(cls_res) <- colnames(clsM)
+  
+  rownames(oth_res) <- colnames(otherM)
+  colnames(oth_res) <- colnames(otherM)
+  
+  res_cls <- data.table("from" = rownames(cls_res), cls_res)
+  res_cls <- melt(res_cls, id.vars = "from", value.name = "weights", variable.name = "to")
+  
+  res_cls[is.na(res_cls$weights)]$weights <- 0
+  
+  res_oth <- data.table("from" = rownames(oth_res), oth_res)
+  res_oth <- melt(res_oth, id.vars = "from", value.name = "weights", variable.name = "to")
+  
+  res_oth[is.na(res_oth$weights)]$weights <- 0
+  
+  res_cls <- res_cls[res_cls$from != res_cls$to, ]
+  res_oth <- res_oth[res_oth$from != res_oth$to, ]
+  
+  nodes <- data.frame("id" = en_gen)
+  nodes$type <- ifelse(nodes$id %in% mgenes, "MARKER", "NORMAL")
+  
+  nodes_cls <- nodes
+  nodes_oth <- nodes
+  
+  nodes_cls$cls_exp <- sapply(nodes$id, function(x) mean(clsM[,x]))
+  nodes_oth$cls_exp <- sapply(nodes$id, function(x) mean(otherM[,x]))
+  
+  p1 <- plots(res_cls, nodes_cls,  cls1, "Cluster")
+  p2 <- plots(res_oth, nodes_oth,  cls2, "Other")
+  
+  ff = combineWidgets(p1, p2, title = pathways)
+  return(ff)
+}
 
 
