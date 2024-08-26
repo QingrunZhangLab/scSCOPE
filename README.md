@@ -23,8 +23,8 @@ all_p <- geneNetworkPlots(expr.data, marker_gene, cluster1, cluster2= NULL, path
 all_p <- geneNetworkPlots(expr.data, "Il7r", cluster1 = 4, cluster2 = 10, pathways_of_interest = c("mmu04660", "mmu04659"))
 print(all_p$Il7r)
 ```
+<geneNetwork src="https://github.com/user-attachments/assets/80c9fc4c-4f1c-4882-8af7-b2698c2979b5" width="100" height="100")>
 
-![geneNetwork](https://github.com/user-attachments/assets/edd56ae3-2ed7-4d31-8a0e-f5daadc094e3  | width=100)
 
 Pathway Network Plot for a pathway of interest in two clusters can be created by using pathwayNetworkPlots() function. 
 
